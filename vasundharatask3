@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Money Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Money Tracker</h1>
+        <div id="balance">Balance: $0</div>
+        <form id="transactionForm">
+            <label for="amount">Amount:</label>
+            <input type="number" id="amount" name="amount" required>
+            <label for="type">Type:</label>
+            <select id="type" name="type">
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+            </select>
+            <button type="submit">Add Transaction</button>
+        </form>
+        <ul id="transactions">
+            <!-- Transactions will be dynamically added here -->
+        </ul>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    width: 80%;
+    margin: auto;
+    padding: 20px;
+}
+
+h1 {
+    text-align: center;
+}
+
+#balance {
+    font-size: 20px;
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+input[type="number"] {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+}
+
+select {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+}
+
+button {
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+li {
+    margin-bottom: 10px;
+    padding: 10px;
+    border: 1px solid #ccc;
+}
+const express = require('express');
+const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Connect to MongoDB
+mongoose.connect('mongodb://localhost:27017/money_tracker', { useNewUrlParser: true, useUnifiedTopology: true });
+const db = mongoose.connection;
+db.on('error', console.error.bind(console, 'MongoDB connection error:'));
+db.once('open', () => console.log('Connected to MongoDB'));
+
+// Create schema
+const transactionSchema = new mongoose.Schema({
+    amount: Number,
+    type: String,
+    date: { type: Date, default: Date.now }
+});
+const Transaction = mongoose.model('Transaction', transactionSchema);
+
+// Middleware
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Serve static files
+app.use(express.static(__dirname));
+
+// Routes
+app.get('/', (req, res) => {
+    res.sendFile(__dirname + '/index.html');
+});
+
+app.post('/transactions', (req, res) => {
+    const newTransaction = new Transaction({
+        amount: req.body.amount,
+        type: req.body.type
+    });
+    newTransaction.save((err, transaction) => {
+        if (err) {
+            console.error(err);
+            res.status(500).send('Error saving transaction');
+        } else {
+            res.redirect('/');
+        }
+    });
+});
+
+app.get('/transactions', (req, res) => {
+    Transaction.find({}, (err, transactions) => {
+        if (err) {
+            console.error(err);
+            res.status(500).send('Error retrieving transactions');
+        } else {
+            res.send(transactions);
+        }
+    });
+});
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
+document.addEventListener('DOMContentLoaded', function () {
+    const transactionForm = document.getElementById('transactionForm');
+    const transactionsList = document.getElementById('transactions');
+    const balanceDisplay = document.getElementById('balance');
+
+    transactionForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        const formData = new FormData(transactionForm);
+        const amount = formData.get('amount');
+        const type = formData.get('type');
+
+        fetch('/transactions', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log(data);
+            transactionForm.reset();
+            getTransactions();
+        })
+        .catch(error => {
+            console.error('There was a problem with the fetch operation:', error);
+        });
+    });
+
+    function getTransactions() {
+        fetch('/transactions')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            let totalIncome = 0;
+            let totalExpense = 0;
+            transactionsList.innerHTML = '';
+            data.forEach(transaction => {
+                const listItem = document.createElement('li');
+                listItem.textContent = `${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}: $${transaction.amount}`;
+                if (transaction.type === 'income') {
+                    totalIncome += transaction.amount;
+                } else {
+                    totalExpense += transaction.amount;
+                }
+                transactionsList.appendChild(listItem);
+            });
+            const balance = totalIncome - totalExpense;
+            balanceDisplay.textContent = `Balance: $${balance}`;
+        })
+        .catch(error => {
+            console.error('There was a problem with the fetch operation:', error);
+        });
+    }
+
+    getTransactions();
+});
